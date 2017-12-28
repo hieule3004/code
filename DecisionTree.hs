@@ -60,7 +60,7 @@ addToMapping :: Eq a => (a, b) -> [(a, [b])] -> [(a, [b])]
 addToMapping (name, val) []
   = [(name, [val])]
 addToMapping x@(name, val) ((name', vals) : xs)
-  | name == name' = (name, val : vals) : xs
+  | name == name' = (name', val : vals) : xs
   | otherwise     = (name', vals) : addToMapping x xs
 
 buildFrequencyTable :: Attribute -> DataSet -> [(AttValue, Int)]
@@ -115,18 +115,16 @@ partitionData (header, rows) attr@(name, vals)
 buildTree :: DataSet -> Attribute -> AttSelector -> DecisionTree 
 buildTree (_, []) _ _
   = Null
-buildTree dataset attr@(name, _) selector
-  = Node name' (map build (partitionData dataset attr'))
+buildTree dataset@(header, rows) attr@(name, _) selector
+  | allSame vals 
+    = Leaf (head vals)
+  | otherwise    
+    = Node name' (map build (partitionData dataset attr'))
   where
    attr'@(name', _) = selector dataset attr
-   build (val, dataset'@(header', rows')) 
-     = (val, treeH dataset')
-     where
-      vals = map (lookUpAtt name header') rows'
-      treeH dataset'
-        | vals == []   = Null
-        | allSame vals = Leaf (head vals)
-        | otherwise    = buildTree dataset' attr selector
+   vals             = map (lookUpAtt name header) rows
+   build (val, dataset') 
+     = (val, buildTree dataset' attr selector)
 
 --------------------------------------------------------------------
 -- PART IV
