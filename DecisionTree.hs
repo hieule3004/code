@@ -116,15 +116,13 @@ buildTree :: DataSet -> Attribute -> AttSelector -> DecisionTree
 buildTree (_, []) _ _
   = Null
 buildTree dataset@(header, rows) attr@(name, _) selector
-  | allSame vals 
-    = Leaf (head vals)
-  | otherwise    
-    = Node name' (map build (partitionData dataset attr'))
-  where
-   attr'@(name', _) = selector dataset attr
-   vals             = map (lookUpAtt name header) rows
-   build (val, dataset') 
-     = (val, buildTree dataset' attr selector)
+  | allSame vals = Leaf (head vals)
+  | otherwise    = Node name' (map build (partitionData dataset attr'))
+    where
+     vals             = map (lookUpAtt name header) rows
+     attr'@(name', _) = selector dataset attr
+     build (val, dataset') 
+       = (val, buildTree dataset' attr selector)
 
 --------------------------------------------------------------------
 -- PART IV
@@ -152,13 +150,9 @@ gain dataset@(header, rows) attP@(_, valPs) attC
 
 bestGainAtt :: AttSelector
 bestGainAtt dataset@(header, _) attr@(name, _)
-  = maxAtt (map pair (filter ((/= name) . fst) header))
+  = snd (maximum (map pair (filter ((/= name) . fst) header)))
   where
-   pair attr' = (attr', gain dataset attr attr')
-   maxAtt [(attr, _)] = attr
-   maxAtt (x : x' : xs)
-     | snd x < snd x' = maxAtt (x' : xs)
-     | otherwise      = maxAtt (x : xs)
+   pair attr' = (gain dataset attr' attr, attr')
 
 --------------------------------------------------------------------
 
