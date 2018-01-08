@@ -59,12 +59,8 @@ getAttribute _ _
   = []
 
 getChildren :: String -> XML -> [XML]
-getChildren str (Element _ _ xmls)
-  = filter get xmls
-  where
-   get (Element name _ _)
-     = str == name
-   get _ = False
+getChildren str (Element _ _  xmls)
+  = [xml | xml@(Element n _ _) <- xmls, str == n]
 getChildren _ _
   = []
 
@@ -77,8 +73,8 @@ getChild str xml
 
 addChild :: XML -> XML -> XML
 -- Pre: the second argument is an Element
-addChild xml (Element name attr xmls) 
-  = Element name attr (xmls ++ [xml])
+addChild xml (Element name attrs xmls) 
+  = Element name attrs (xmls ++ [xml])
 
 getValue :: XML -> XML
 getValue (Element _ _ xmls)
@@ -89,6 +85,7 @@ getValue (Element _ _ xmls)
    getValueH (Element _ _ xmls) = concatMap getValueH xmls
 getValue xml
   = xml
+-- getValue xml = Text (getValueH xml)  is fine?
 
 -------------------------------------------------------------------------
 -- Part II
@@ -121,18 +118,17 @@ popAndAdd (xml : xml' : xmls)
 parseAttributes :: String -> (Attributes, String)
 -- Pre: The XML attributes string is well-formed
 parseAttributes str
-  = (parseAtt attStr, restStr)
+  = (parseAtt attStr, tail restStr)
   where
-   (attStr, restStr) = splitCon (/= '>') tail str
+   (attStr, restStr) = break (== '>') str
    parseAtt [] = []
    parseAtt attStr
-     = (name, val) : parseAtt attStr'
+     = (name, val) : parseAtt (dropWhile (flip elem "\n\" ") attStr')
      where
      (name, str')      
-       = splitCon (flip notElem "=\n ") 
-           (dropWhile (flip elem "=\n\" ")) attStr
+       = parseName attStr 
      (val, attStr') 
-       = splitCon (/= '\"') (dropWhile (flip elem "\n\" ")) str'
+       = break (== '\"') (tail (dropWhile (flip elem "= ") str'))
    
 splitCon :: (a -> Bool) -> ([a] -> [a]) -> [a] -> ([a],[a])
 splitCon f g as
@@ -147,14 +143,14 @@ parse' :: String -> Stack -> XML
 parse' [] ((Element [] [] xmls) : _) = head xmls
 parse' str@(c : cs) stack = case c of
   '<' -> case (head cs) of 
-    '/' -> parse' (tail (dropWhile (/= '>') str)) (popAndAdd stack)
+    '/' -> parse' (tail (dropWhile (/= '>') cs)) (popAndAdd stack)
     _   -> parse' restStr (Element name attr [] : stack)
   _   -> parse' restStr' (addText text stack)
   where
    (name, str')
-     = splitCon (flip notElem "> ") skipSpace (dropWhile (== '<') str)
-   (attr, restStr)  = parseAttributes str'
-   (text, restStr') = splitCon (/= '<') id str
+     = parseName cs
+   (attr, restStr)  = parseAttributes (dropWhile (flip elem "> ") str')
+   (text, restStr') = break (/= '<') str
 
 -------------------------------------------------------------------------
 -- Part III

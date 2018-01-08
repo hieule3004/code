@@ -45,16 +45,18 @@ allSame xs
 
 remove :: Eq a => a -> [(a, b)] -> [(a, b)]
 remove a xs
-  = filter ((== a) . fst) xs
+  = filter ((/= a) . fst) xs
 
 lookUpAtt :: AttName -> Header -> Row -> AttValue
 --Pre: The attribute name is present in the given header.
 lookUpAtt name header row
-  = head (filter (flip elem (lookUp name header)) row)
+--  = head (filter (flip elem (lookUp name header)) row)
+  = lookUp name (zip (map fst header) row)
 
 removeAtt :: AttName -> Header -> Row -> Row
 removeAtt name header row
-  = filter (flip notElem (lookUp name header)) row
+--  = filter (flip notElem (lookUp name header)) row
+  = map snd (remove name (zip (map fst header) row))
 
 addToMapping :: Eq a => (a, b) -> [(a, [b])] -> [(a, [b])]
 addToMapping (name, val) []
@@ -65,10 +67,16 @@ addToMapping x@(name, val) ((name', vals) : xs)
 
 buildFrequencyTable :: Attribute -> DataSet -> [(AttValue, Int)]
 --Pre: Each row of the data set contains an instance of the attribute
-buildFrequencyTable (_, vals) (_, rows)
+buildFrequencyTable (name, vals) (header, rows)
   = map freq vals
   where
-   freq val = (val, length (filter (elem val) rows))
+   freq val 
+     = (val, length (filter ((== val) . lookUpAtt name header) rows))
+
+removeRows :: AttName -> AttValue -> DataSet -> [Row]
+--Pre: Value is in header with name
+removeRows name val (header, rows)
+  = filter ((== val) . lookUpAtt name header) rows
 
 --------------------------------------------------------------------
 -- PART II
@@ -106,11 +114,12 @@ nextAtt (header, _) (classifierName, _)
   = head (filter ((/= classifierName) . fst) header)
 
 partitionData :: DataSet -> Attribute -> Partition
-partitionData (header, rows) attr@(name, vals)
-  = map (\val -> (val, (header', rows' val))) vals
+partitionData dataset@(header, rows) attr@(name, vals)
+  = map (\val -> (val, (header', partRows val))) vals
   where 
-   header'   = filter (/= attr) header
-   rows' val = map (removeAtt name header) (filter (elem val) rows)
+   header' = remove name header
+   partRows val      
+     = map (removeAtt name header) (removeRows name val dataset)
 
 buildTree :: DataSet -> Attribute -> AttSelector -> DecisionTree 
 buildTree (_, []) _ _
@@ -132,25 +141,25 @@ entropy :: DataSet -> Attribute -> Double
 entropy (_, []) _
   = 0.0
 entropy dataset attr
-  = - (sum (map (xlogx . (/sumAll) . fromIntegral) counts))
+  = - (sum (map (xlogx . (/ sumAll) . fromIntegral) counts))
   where
-   counts = snd (unzip (buildFrequencyTable attr dataset))
-   sumAll = fromIntegral (sum counts)
+   counts = map snd (buildFrequencyTable attr dataset)
+   sumAll = fromIntegral (length (snd dataset))
 
 gain :: DataSet -> Attribute -> Attribute -> Double
-gain dataset@(header, rows) attP@(_, valPs) attC
+gain dataset@(header, rows) attP@(nameP, valPs) attC
   = entropy dataset attC - sum (map calc valPs)
   where
    calc valP 
      = (sumValP / sumAttC) * entropy datasetP attC
      where
-      datasetP  = (header, filter (elem valP) rows)
-      sumAttC   = fromIntegral (length rows)
-      sumValP   = fromIntegral (length (snd datasetP))
+      datasetP = (header, removeRows nameP valP dataset)
+      sumAttC  = fromIntegral (length rows)
+      sumValP  = fromIntegral (length (snd datasetP))
 
 bestGainAtt :: AttSelector
 bestGainAtt dataset@(header, _) attr@(name, _)
-  = snd (maximum (map pair (filter ((/= name) . fst) header)))
+  = snd (maximum (map pair (remove name header)))
   where
    pair attr' = (gain dataset attr' attr, attr')
 
