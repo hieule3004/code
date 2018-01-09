@@ -118,12 +118,12 @@ popAndAdd (xml : xml' : xmls)
 parseAttributes :: String -> (Attributes, String)
 -- Pre: The XML attributes string is well-formed
 parseAttributes str
-  = (parseAtt attStr, tail restStr)
+  = (parseAtt attStr, restStr)
   where
    (attStr, restStr) = break (== '>') str
    parseAtt [] = []
    parseAtt attStr
-     = (name, val) : parseAtt (dropWhile (flip elem "\n\" ") attStr')
+     = (name, val) : parseAtt (dropWhile (flip elem "\" ") attStr')
      where
      (name, str')      
        = parseName attStr 
@@ -140,17 +140,16 @@ parse s
   = parse' (skipSpace s) [sentinel]
 
 parse' :: String -> Stack -> XML
-parse' [] ((Element [] [] xmls) : _) = head xmls
+parse' [] ((Element _ _ xmls) : _) = head xmls
 parse' str@(c : cs) stack = case c of
   '<' -> case (head cs) of 
     '/' -> parse' (tail (dropWhile (/= '>') cs)) (popAndAdd stack)
-    _   -> parse' restStr (Element name attr [] : stack)
+    _   -> parse' (tail restStr) (Element name attr [] : stack)
   _   -> parse' restStr' (addText text stack)
   where
-   (name, str')
-     = parseName cs
-   (attr, restStr)  = parseAttributes (dropWhile (flip elem "> ") str')
-   (text, restStr') = break (/= '<') str
+   (name, str')     = parseName cs
+   (attr, restStr)  = parseAttributes (skipSpace str')
+   (text, restStr') = break (== '<') str
 
 -------------------------------------------------------------------------
 -- Part III
