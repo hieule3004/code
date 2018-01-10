@@ -147,20 +147,28 @@ executeStatement stm fds pds st
         -> executeBlock bp fds pds st
         where 
          bp = if (eval p fds st == I 1) then b1 else b2     
-      While p b -> executeStatement (While p b) fds pds st'
+      While p b -> case (eval p fds st) of
+        I 1 -> executeStatement (While p b) fds pds st'
+        _   -> st
         where
          st' = executeBlock b fds pds st  
-      Call id p es 
-        -> undefined
+      Call id p es -> case id of
+        [] -> st'
+        _  -> updateVar (id, getValue "$res" st') st'' 
         where
-         st' = bindArgs () (evalArgs es fds st) ++ getGlobals st   
+         (ids, b) = lookUp p pds
+         st'      = executeBlock b fds pds stH'
+         stH'     = bindArgs ids (evalArgs es fds st) ++ st
+         st''     = getLocals st ++ getGlobals st'
       Return e 
-        -> undefined 
+        -> executeStatement (Assign "$res" e) fds pds st
 
 executeBlock :: Block -> [FunDef] -> [ProcDef] -> State -> State
 -- Pre: All code blocks and associated statements are well formed
-executeBlock 
-  = undefined
+executeBlock b fds pds st
+  = foldl exS st b
+  where
+   exS st' stm = executeStatement stm fds pds st'
 
 ---------------------------------------------------------------------
 -- Part IV
