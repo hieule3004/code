@@ -89,24 +89,22 @@ updateVar (id, v) (b@(id', (s, _)) : st)
 ---------------------------------------------------------------------
 -- Part II
 
+table = [(Add, (+)), (Mul, (*)), (Less, bool (<)), (Equal, bool (==))]
+bool p i1 i2
+  = if (p i1 i2) then 1 else 0
+
 applyOp :: Op -> Value -> Value -> Value
 -- Pre: The values have the appropriate types (I or A) for each primitive
-applyOp Add (I i) (I j)
-  = I (i + j) 
-applyOp Mul (I i) (I j)
-  = I (i * j)
-applyOp Less (I i) (I j)
-  = I (if (i < j) then 1 else 0)
-applyOp Equal (I i) (I j)
-  = I (if (i == j) then 1 else 0)
 applyOp Index (A as) (I i)
-  | i < length as = I (snd (as !! i))
-  | otherwise     = I 0
+  = maybe (I 0) (\i -> I i) (lookup i as) 
+applyOp op (I i1) (I i2)
+  = I ((lookUp op table) i1 i2)
 
 bindArgs :: [Id] -> [Value] -> State
 -- Pre: the lists have the same length
 bindArgs ids vals
-  = zip ids (zip (repeat Local) vals)
+--  = zip ids (zip (repeat Local) vals)
+  = zipWith (\id val -> (id, (Local, val))) ids vals
 
 evalArgs :: [Exp] -> [FunDef] -> State -> [Value]
 evalArgs es fds st
@@ -118,15 +116,18 @@ eval :: Exp -> [FunDef] -> State -> Value
 eval e fds st
   = case e of
    Const v -> v
-   Var id -> getValue id st
-   OpApp op e1 e2 -> applyOp op (eval e1 fds st) (eval e2 fds st)
-   Cond p e1 e2 -> eval ep fds st
+   Var id  -> getValue id st
+   OpApp op e1 e2 
+           -> applyOp op (eval e1 fds st) (eval e2 fds st)
+   Cond p e1 e2 
+           -> eval ep fds st
     where
      ep = if (eval p fds st == I 1) then e1 else e2
-   FunApp id es -> eval e' fds (st' ++ st)
+   FunApp f es 
+           -> eval e fds (st' ++ st)
     where
-     (ids', e') = lookUp id fds
-     st'        = bindArgs ids' (evalArgs es fds st)
+     (ids, e) = lookUp f fds
+     st'      = bindArgs ids (evalArgs es fds st)
 
 ---------------------------------------------------------------------
 -- Part III
@@ -148,13 +149,13 @@ executeStatement stm fds pds st
         where 
          bp = if (eval p fds st == I 1) then b1 else b2     
       While p b -> case (eval p fds st) of
-        I 1 -> executeStatement (While p b) fds pds st'
+        I 1 -> executeStatement stm fds pds st'
         _   -> st
         where
          st' = executeBlock b fds pds st  
-      Call id p es -> case id of
-        [] -> st'
-        _  -> updateVar (id, getValue "$res" st') st'' 
+      Call id p es 
+        | null id   -> st'
+        | otherwise -> updateVar (id, getValue "$res" st') st'' 
         where
          (ids, b) = lookUp p pds
          st'      = executeBlock b fds pds stH'
@@ -170,7 +171,7 @@ executeBlock b fds pds st
   where
    exS st' stm = executeStatement stm fds pds st'
 
----------------------------------------------------------------------
+--------------------------------------------------------------------
 -- Part IV
 
 translate :: FunDef -> Id -> [(Id, Id)] -> ProcDef
@@ -180,9 +181,21 @@ translate (name, (as, e)) newName nameMap
     (b, e', ids') = translate' e nameMap ['$' : show n | n <- [1..]] 
 
 translate' :: Exp -> [(Id, Id)] -> [Id] -> (Block, Exp, [Id])
-translate' 
-  = undefined
+translate' e nameMap is
+  = (b, e', ids')
+  where
+   b = getBlock e [] is
 
+getBlock :: Exp -> Block -> [Id] -> Block
+getBlock e stack is
+  = case e of
+   OpApp op e1 e2 
+     -> getBlock e1 stack is' : getBlock e2 stack is' : Assign i a
+   Cond p e1 e2 -> If p (getBlock e1 is) (getBlock e2 is) : stack
+   FunApp id es -> 
+  where
+   i : is' = is
+   
 ---------------------------------------------------------------------
 -- PREDEFINED FUNCTIONS
 
