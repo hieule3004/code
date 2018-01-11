@@ -182,20 +182,29 @@ translate (name, (as, e)) newName nameMap
 
 translate' :: Exp -> [(Id, Id)] -> [Id] -> (Block, Exp, [Id])
 translate' e nameMap is
-  = (b, e', ids')
+  = undefined --(b, e', ids')
   where
    b = getBlock e [] is
 
 getBlock :: Exp -> Block -> [Id] -> Block
 getBlock e stack is
   = case e of
-   OpApp op e1 e2 
-     -> getBlock e1 stack is' : getBlock e2 stack is' : Assign i a
-   Cond p e1 e2 -> If p (getBlock e1 is) (getBlock e2 is) : stack
-   FunApp id es -> 
-  where
-   i : is' = is
+   Const c -> Assign (head is) e : stack
+   Var v   -> Assign (head is) e : stack 
+   OpApp op e1 e2 -> stack1 ++ stack2 ++ stack'
+     where
+      stack1 = getBlock e1 [] is 
+      stack2 = getBlock e2 [] is
+      stack' = Assign (head is) (OpApp op (getVar stack1) (getVar stack2)) : stack
+      getVar [Assign id _]    = Var id
+      getVar [AssignA id _ _] = Var id
+      getVar [Call id _ _]    = Var id
+      getVar (_ : xs)         = getVar xs
+   Cond p e1 e2 
+     | e1 == Const (I 0) -> While p [] : stack
+     | otherwise         -> If p [] [] : stack
    
+
 ---------------------------------------------------------------------
 -- PREDEFINED FUNCTIONS
 
