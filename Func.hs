@@ -184,7 +184,7 @@ translate' :: Exp -> [(Id, Id)] -> [Id] -> (Block, Exp, [Id])
 translate' e nameMap is
   = trans [] [e] is
    where
-    trans stack [] is       = (stack, toVar is, is)
+    trans stack [] is       = (stack, toVar stack is, is)
     trans stack (e : es) is = trans (stack ++ b) es ids
       where
        (b, ids) = case e of
@@ -200,7 +200,7 @@ translate' e nameMap is
             (stack1, _, is')  = trans [] [e1] is
             (stack2, _, is'') = trans [] [e2] is'
             stack' = [Assign (head is'') e']
-            e'     = OpApp op (toVar (getI stack1 [])) (toVar (getI stack2 []))
+            e'     = OpApp op (toVar stack1 []) (toVar stack2 [])
          Cond p (Const (I 0)) e1
            -> ([While p stack1], getI stack1 is')
            where
@@ -215,7 +215,7 @@ translate' e nameMap is
          FunApp id es'
            -> ([Call (head is) (lookUp id nameMap) es'], tail is)
 
-toVar ids = Var (head ids)
+toVar b is = Var (head (getI b is))
 
 getI [] is               = is
 getI [Assign id _] is    = id : is
