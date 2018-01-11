@@ -96,7 +96,7 @@ bool p i1 i2
 applyOp :: Op -> Value -> Value -> Value
 -- Pre: The values have the appropriate types (I or A) for each primitive
 applyOp Index (A as) (I i)
-  = maybe (I 0) (\i -> I i) (lookup i as) 
+  = maybe (I 0) (\i' -> I i') (lookup i as) 
 applyOp op (I i1) (I i2)
   = I ((lookUp op table) i1 i2)
 
@@ -182,28 +182,51 @@ translate (name, (as, e)) newName nameMap
 
 translate' :: Exp -> [(Id, Id)] -> [Id] -> (Block, Exp, [Id])
 translate' e nameMap is
-  = undefined --(b, e', ids')
-  where
-   b = getBlock e [] is
+  = trans [] [e] is
+   where
+    trans stack [] is       = (stack, toVar is, is)
+    trans stack (e : es) is = trans (stack ++ b) es ids
+      where
+       (b, ids) = case e of
+         Const _ 
+           -> ([Assign (head is) e], tail is)
+         Var _ 
+           -> ([Assign (head is) e], tail is)
+         OpApp Index e1 e2
+           -> ([AssignA (head is) e1 e2], tail is)
+         OpApp op e1 e2
+           -> (stack1 ++ stack2 ++ stack', tail is'')
+           where
+            (stack1, _, is')  = trans [] [e1] is
+            (stack2, _, is'') = trans [] [e2] is'
+            stack' = [Assign (head is'') e']
+            e'     = OpApp op (toVar (getI stack1 [])) (toVar (getI stack2 []))
+         Cond p (Const (I 0)) e1
+           -> ([While p stack1], getI stack1 is')
+           where
+            (stack1, _, is')  = trans [] [e1] is
+         Cond p e1 e2
+           -> ([If p stack1H stack2], getI stack2 is'')
+           where
+            (stack1, _, is')     = trans [] [e1] is
+            (stack2, _, is'')    = trans [] [e2] (getI stack1 is')
+            (stack1', [stack1E]) = splitAt (length stack1 - 1) stack1
+            stack1H              = stack1' ++ [match stack1E (getI stack2 [])]  
+         FunApp id es'
+           -> ([Call (head is) (lookUp id nameMap) es'], tail is)
 
-getBlock :: Exp -> Block -> [Id] -> Block
-getBlock e stack is
-  = case e of
-   Const c -> Assign (head is) e : stack
-   Var v   -> Assign (head is) e : stack 
-   OpApp op e1 e2 -> stack1 ++ stack2 ++ stack'
-     where
-      stack1 = getBlock e1 [] is 
-      stack2 = getBlock e2 [] is
-      stack' = Assign (head is) (OpApp op (getVar stack1) (getVar stack2)) : stack
-      getVar [Assign id _]    = Var id
-      getVar [AssignA id _ _] = Var id
-      getVar [Call id _ _]    = Var id
-      getVar (_ : xs)         = getVar xs
-   Cond p e1 e2 
-     | e1 == Const (I 0) -> While p [] : stack
-     | otherwise         -> If p [] [] : stack
-   
+toVar ids = Var (head ids)
+
+getI [] is               = is
+getI [Assign id _] is    = id : is
+getI [AssignA id _ _] is = id : is
+getI [Call id _ _] is    = id : is
+getI (_ : xs) is         = getI xs is
+
+match (Assign _ e) [id]      = Assign id e
+match (AssignA _ id' e) [id] = AssignA id id' e
+match (Call _ id' es) [id]   = Call id id' es
+match e _                    = e
 
 ---------------------------------------------------------------------
 -- PREDEFINED FUNCTIONS
