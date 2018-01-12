@@ -89,8 +89,8 @@ updateVar (id, v) (b@(id', (s, _)) : st)
 ---------------------------------------------------------------------
 -- Part II
 
-table = [(Add, (+)), (Mul, (*)), (Less, bool (<)), (Equal, bool (==))]
-bool p i1 i2
+table = [(Add, (+)), (Mul, (*)), (Less, bVal (<)), (Equal, bVal (==))]
+bVal p i1 i2
   = if (p i1 i2) then 1 else 0
 
 applyOp :: Op -> Value -> Value -> Value
