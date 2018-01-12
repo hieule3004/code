@@ -202,30 +202,31 @@ translate' e nameMap is
             stack' = [Assign (head is'') e']
             e'     = OpApp op (toVar stack1 []) (toVar stack2 [])
          Cond p (Const (I 0)) e1
-           -> ([While p stack1], is')
+           -> ([While p stack1], getI stack1 is')
            where
             (stack1, _, is')  = trans [] [e1] is
          Cond p e1 e2
-           -> ([If p (stack1' ++ stack1H) stack2], is'')
+           -> ([If p stack1H stack2], is'')
            where
             (stack1, _, is')     = trans [] [e1] is
-            (stack2, _, is'')    = trans [] [e2] (fst (matchIndex stack1 is' []))
-            (stack1', [stack1S]) = splitAt (length stack1 - 1) stack1
-            stack1H              = snd (matchIndex [stack1S] [] (head is2'))
-            is2'                 = fst (matchIndex stack2 [] [])  
+            (stack2, _, is'')    = trans [] [e2] (getI stack1 is')
+            (stack1', [stack1E]) = splitAt (length stack1 - 1) stack1
+            stack1H              = stack1' ++ [match stack1E (getI stack2 [])]  
          FunApp id es'
            -> ([Call (head is) (lookUp id nameMap) es'], tail is)
 
-toVar b is = Var (head (fst (matchIndex b is [])))
+toVar b is = Var (head (getI b is))
 
-matchIndex b is i = case b of
-  []                 -> (is, [])
-  [Assign id e]      -> (id : is, [Assign i e])
-  [AssignA id id' e] -> (id : is, [AssignA i id' e])
-  [If _ _ b']        -> matchIndex b' is i
-  [While _ b']       -> matchIndex b' is i
-  [Call id id' es]   -> (id : is, [Call i id' es])
-  _                  -> matchIndex (tail b) is i
+getI [] is               = is
+getI [Assign id _] is    = id : is
+getI [AssignA id _ _] is = id : is
+getI [Call id _ _] is    = id : is
+getI (_ : xs) is         = getI xs is
+
+match (Assign _ e) [id]      = Assign id e
+match (AssignA _ id' e) [id] = AssignA id id' e
+match (Call _ id' es) [id]   = Call id id' es
+match e _                    = e
 
 ---------------------------------------------------------------------
 -- PREDEFINED FUNCTIONS

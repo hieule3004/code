@@ -210,8 +210,8 @@ translate' e nameMap is
            where
             (stack1, _, is')     = trans [] [e1] is
             (stack2, _, is'')    = trans [] [e2] (fst (matchIndex stack1 is' []))
-            (stack1', [stack1S]) = splitAt (length stack1 - 1) stack1
-            stack1H              = snd (matchIndex [stack1S] [] (head is2'))
+            (stack1', [stack1E]) = splitAt (length stack1 - 1) stack1
+            stack1H              = snd (matchIndex [stack1E] is2' (head is2'))
             is2'                 = fst (matchIndex stack2 [] [])  
          FunApp id es'
            -> ([Call (head is) (lookUp id nameMap) es'], tail is)
@@ -219,13 +219,13 @@ translate' e nameMap is
 toVar b is = Var (head (fst (matchIndex b is [])))
 
 matchIndex b is i = case b of
-  []                 -> (is, [])
-  [Assign id e]      -> (id : is, [Assign i e])
-  [AssignA id id' e] -> (id : is, [AssignA i id' e])
-  [If _ _ b']        -> matchIndex b' is i
-  [While _ b']       -> matchIndex b' is i
-  [Call id id' es]   -> (id : is, [Call i id' es])
-  _                  -> matchIndex (tail b) is i
+[] is i                 = (is, [])
+[Assign id e] is i      = (id : is, [Assign i e])
+[AssignA id id' e] is i = (id : is, [AssignA i id' e])
+[If _ _ b] is i         = matchIndex b is i
+[While _ b] is i        = matchIndex b is i
+[Call id id' es] is i   = (id : is, [Call i id' es])
+(_ : xs) is i           = matchIndex xs is i
 
 ---------------------------------------------------------------------
 -- PREDEFINED FUNCTIONS
