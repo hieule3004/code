@@ -113,18 +113,20 @@ evalArgs es fds st
 eval :: Exp -> [FunDef] -> State -> Value
 -- Pre: All expressions are well formed
 -- Pre: All variables referenced have bindings in the given state
-eval e fds st
+eval e fds st 
   = case e of
-   Const v -> v
-   Var id  -> getValue id st
-   OpApp op e1 e2 
-           -> applyOp op (eval e1 fds st) (eval e2 fds st)
-   Cond p e1 e2 
-           -> eval ep fds st
+  Const v 
+    -> v
+  Var id  
+    -> getValue id st
+  OpApp op e1 e2 
+    -> applyOp op (eval e1 fds st) (eval e2 fds st)
+  Cond p e1 e2 
+    -> eval ep fds st
     where
      ep = if (eval p fds st == I 1) then e1 else e2
-   FunApp f es 
-           -> eval e fds (st' ++ st)
+  FunApp f es 
+    -> eval e fds (st' ++ st)
     where
      (ids, e) = lookUp f fds
      st'      = bindArgs ids (evalArgs es fds st)
@@ -138,31 +140,31 @@ executeStatement :: Statement -> [FunDef] -> [ProcDef] -> State -> State
 --      i.e. it has a binding in the given state
 executeStatement stm fds pds st
   = case stm of
-      Assign id e 
-        -> updateVar (id, eval e fds st) st 
-      AssignA id e1 e2
-        -> updateVar (id, valA) st
-        where 
-         valA = assignArray (getValue id st) (eval e1 fds st) (eval e2 fds st) 
-      If p b1 b2 
-        -> executeBlock bp fds pds st
-        where 
-         bp = if (eval p fds st == I 1) then b1 else b2     
-      While p b -> case (eval p fds st) of
-        I 1 -> executeStatement stm fds pds st'
-        _   -> st
-        where
-         st' = executeBlock b fds pds st  
-      Call id p es 
-        | null id   -> st'
-        | otherwise -> updateVar (id, getValue "$res" st') st'' 
-        where
-         (ids, b) = lookUp p pds
-         st'      = executeBlock b fds pds stH'
-         stH'     = bindArgs ids (evalArgs es fds st) ++ st
-         st''     = getLocals st ++ getGlobals st'
-      Return e 
-        -> executeStatement (Assign "$res" e) fds pds st
+  Assign id e 
+    -> updateVar (id, eval e fds st) st 
+  AssignA id e1 e2
+    -> updateVar (id, valA) st
+    where 
+     valA = assignArray (getValue id st) (eval e1 fds st) (eval e2 fds st) 
+  If p b1 b2 
+    -> executeBlock bp fds pds st
+    where 
+     bp = if (eval p fds st == I 1) then b1 else b2     
+  While p b -> case (eval p fds st) of
+    I 1 -> executeStatement stm fds pds st'
+    _   -> st
+    where
+     st' = executeBlock b fds pds st  
+  Call id p es 
+    | null id   -> st'
+    | otherwise -> updateVar (id, getValue "$res" st') st'' 
+    where
+     (ids, b) = lookUp p pds
+     st'      = executeBlock b fds pds stH'
+     stH'     = bindArgs ids (evalArgs es fds st) ++ st
+     st''     = getLocals st ++ getGlobals st'
+  Return e 
+    -> executeStatement (Assign "$res" e) fds pds st
 
 executeBlock :: Block -> [FunDef] -> [ProcDef] -> State -> State
 -- Pre: All code blocks and associated statements are well formed
@@ -178,42 +180,41 @@ translate :: FunDef -> Id -> [(Id, Id)] -> ProcDef
 translate (name, (as, e)) newName nameMap 
   = (newName, (as, b ++ [Return e']))
   where
-    (b, e', ids') = translate' e nameMap ['$' : show n | n <- [1..]] 
+   (b, e', ids') = translate' e nameMap ['$' : show n | n <- [1..]] 
 
 translate' :: Exp -> [(Id, Id)] -> [Id] -> (Block, Exp, [Id])
 translate' e nameMap is
   = trans [e] [] (head is) is
-   where
-    trans [] stack i is       = (stack, Var i, is)
-    trans (e : es) stack i is = trans es (stack ++ b) i ids 
-      where
-       (b, i, ids) = case e of
-         Const _ 
-           -> ([Assign (head is) e], head is, tail is)
-         Var _ 
-           -> ([Assign (head is) e], head is, tail is)
-         OpApp Index e1 e2
-           -> ([AssignA (head is) e1 e2], head is, tail is)
-         OpApp op e1 e2
-           -> (stack1 ++ stack2 ++ stack', head is'', tail is'')
-           where
-            (stack1, Var i', is')   = trans [e1] [] i is
-            (stack2, Var i'', is'') = trans [e2] [] i' is'
-            stack' = [Assign (head is'') (OpApp op (Var i') (Var i''))]
-         Cond p (Const (I 0)) e'
-           -> ([While p stack'], i', is')
-           where
-            (stack', Var i', is')  = trans [e'] [] i is 
-         Cond p e1 e2 
-           -> ([If p stack1H stack2], i'', is'')
-           where
-            (stack1, Var i', is')   = trans [e1] [] i is
-            (stack2, Var i'', is'') = trans [e2] [] i' (i' : is')
-            stack1H                 = matchIndex stack1 i''
-         FunApp id es'
-           -> ([Call (head is) (lookUp id nameMap) es'], head is, tail is)
+  where
+   trans [] stack i is       
+     = (stack, Var i, is)
+   trans (e : es) stack i is 
+     = trans es (stack ++ b) i ids 
+     where
+      (b, i, ids) = case e of
+        Const _
+          -> ([Assign (head is) e], head is, tail is)
+        Var _ 
+          -> ([Assign (head is) e], head is, tail is)
+        OpApp Index e1 e2
+          -> ([AssignA (head is) e1 e2], head is, tail is)
+        OpApp op e1 e2
+          -> (stack1 ++ stack2 ++ stack', head is'', tail is'')
+          where
+           (stack1, Var i', is')   = trans [e1] [] i is
+           (stack2, Var i'', is'') = trans [e2] [] i' is'
+           stack' = [Assign (head is'') (OpApp op (Var i') (Var i''))]
+        Cond p e1 e2 
+          -> ([If p stack1' stack2], i'', is'')
+          where
+           (stack1, Var i', is')   = trans [e1] [] i is
+           (stack2, Var i'', is'') = trans [e2] [] i' (i' : is')
+           stack1'                 = matchIndex stack1 i''
+        FunApp id es'
+          -> ([Call (head is) (lookUp id nameMap) es'], head is, tail is)
 
-matchIndex b i = case b of
+matchIndex b i 
+  = case b of
   []                -> []
   [Assign _ e]      -> [Assign i e]
   [AssignA _ id' e] -> [AssignA i id' e]
