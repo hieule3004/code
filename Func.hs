@@ -182,50 +182,45 @@ translate (name, (as, e)) newName nameMap
 
 translate' :: Exp -> [(Id, Id)] -> [Id] -> (Block, Exp, [Id])
 translate' e nameMap is
-  = trans [] [e] is
+  = trans [e] [] (head is) is
    where
-    trans stack [] is       = (stack, toVar stack is, is)
-    trans stack (e : es) is = trans (stack ++ b) es ids
+    trans [] stack i is       = (stack, Var i, is)
+    trans (e : es) stack i is = trans es (stack ++ b) i ids 
       where
-       (b, ids) = case e of
+       (b, i, ids) = case e of
          Const _ 
-           -> ([Assign (head is) e], tail is)
+           -> ([Assign (head is) e], head is, tail is)
          Var _ 
-           -> ([Assign (head is) e], tail is)
+           -> ([Assign (head is) e], head is, tail is)
          OpApp Index e1 e2
-           -> ([AssignA (head is) e1 e2], tail is)
+           -> ([AssignA (head is) e1 e2], head is, tail is)
          OpApp op e1 e2
-           -> (stack1 ++ stack2 ++ stack', tail is'')
+           -> (stack1 ++ stack2 ++ stack', head is'', tail is'')
            where
-            (stack1, _, is')  = trans [] [e1] is
-            (stack2, _, is'') = trans [] [e2] is'
-            stack' = [Assign (head is'') e']
-            e'     = OpApp op (toVar stack1 []) (toVar stack2 [])
-         Cond p (Const (I 0)) e1
-           -> ([While p stack1], is')
+            (stack1, Var i', is')   = trans [e1] [] i is
+            (stack2, Var i'', is'') = trans [e2] [] i' is'
+            stack' = [Assign (head is'') (OpApp op (Var i') (Var i''))]
+         Cond p (Const (I 0)) e'
+           -> ([While p stack'], i', is')
            where
-            (stack1, _, is')  = trans [] [e1] is
-         Cond p e1 e2
-           -> ([If p (stack1' ++ stack1H) stack2], is'')
+            (stack', Var i', is')  = trans [e'] [] i is 
+         Cond p e1 e2 
+           -> ([If p stack1H stack2], i'', is'')
            where
-            (stack1, _, is')     = trans [] [e1] is
-            (stack2, _, is'')    = trans [] [e2] (fst (matchIndex stack1 is' []))
-            (stack1', [stack1S]) = splitAt (length stack1 - 1) stack1
-            stack1H              = snd (matchIndex [stack1S] [] (head is2'))
-            is2'                 = fst (matchIndex stack2 [] [])  
+            (stack1, Var i', is')   = trans [e1] [] i is
+            (stack2, Var i'', is'') = trans [e2] [] i' (i' : is')
+            stack1H                 = matchIndex stack1 i''
          FunApp id es'
-           -> ([Call (head is) (lookUp id nameMap) es'], tail is)
+           -> ([Call (head is) (lookUp id nameMap) es'], head is, tail is)
 
-toVar b is = Var (head (fst (matchIndex b is [])))
-
-matchIndex b is i = case b of
-  []                 -> (is, [])
-  [Assign id e]      -> (id : is, [Assign i e])
-  [AssignA id id' e] -> (id : is, [AssignA i id' e])
-  [If _ _ b']        -> matchIndex b' is i
-  [While _ b']       -> matchIndex b' is i
-  [Call id id' es]   -> (id : is, [Call i id' es])
-  _                  -> matchIndex (tail b) is i
+matchIndex b i = case b of
+  []                -> []
+  [Assign _ e]      -> [Assign i e]
+  [AssignA _ id' e] -> [AssignA i id' e]
+  [If p b1 b2]      -> [If p (matchIndex b1 i) (matchIndex b2 i)]
+  [While p b']      -> [While p (matchIndex b' i)]
+  [Call _ id' es]   -> [Call i id' es]
+  (stm : b')        -> stm : matchIndex b' i
 
 ---------------------------------------------------------------------
 -- PREDEFINED FUNCTIONS
