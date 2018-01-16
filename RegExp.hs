@@ -147,12 +147,17 @@ type MetaState = [State]
 type MetaTransition = (MetaState, MetaState, Label)
 
 getFrontier :: State -> Automaton -> [Transition]
-getFrontier
-  = undefined
+getFrontier st amt
+  | accepts amt "" = sort (map (\st' -> (st', st', Eps)) ts ++ fs)
+  | otherwise      = fs
+  where
+   ts  = terminalStates amt
+   trs = transitions amt
+   fs  = [tr | tr@(_, st', C c) <- trs, accepts (st, [st'], trs) [c]]
 
 groupTransitions :: [Transition] -> [(Label, [State])]
-groupTransitions
-  = undefined
+groupTransitions trs
+  = sort (nub [(C c, [st | (_, st, C c') <- trs, c == c']) | (_, _, C c) <- trs])
 
 makeDA :: Automaton -> Automaton
 -- Pre: Any cycle in the NDA must include at least one non-Eps transition
